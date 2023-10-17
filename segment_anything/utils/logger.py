@@ -61,28 +61,4 @@ def setup_logging(log_dir: str ='./logs/',
     return logger
 
 
-def info(msg, *args, **kwargs):
-    """
-    Log a message with severity 'INFO' on the SAM logger.
-    """
-    get_logger().info(msg, *args, **kwargs)
-
-
-def debug(msg, *args, **kwargs):
-    """Log a message with severity 'DEBUG' on the SAM logger."""
-    get_logger().debug(msg, *args, **kwargs)
-
-
-def error(msg, *args, **kwargs):
-    """Log a message with severity 'ERROR' on the SAM logger."""
-    get_logger().error(msg, *args, **kwargs)
-
-
-def warning(msg, *args, **kwargs):
-    """Log a message with severity 'WARNING' on the SAM logger."""
-    get_logger().warning(msg, *args, **kwargs)
-
-
-def critical(msg, *args, **kwargs):
-    """Log a message with severity 'CRITICAL' on the SAM logger."""
-    get_logger().critical(msg, *args, **kwargs)
+logger = get_logger()

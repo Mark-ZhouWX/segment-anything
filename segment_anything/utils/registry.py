@@ -1,7 +1,7 @@
 import inspect
 import os
 
-from segment_anything.utils import logger
+from segment_anything.utils.logger import logger
 
 
 class Registry:

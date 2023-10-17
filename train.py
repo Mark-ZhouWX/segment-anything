@@ -8,7 +8,7 @@ import torch
 from segment_anything.build_sam import create_model
 from segment_anything.dataset.dataset import create_dataloader
 from segment_anything.modeling.loss import create_loss_fn
-from segment_anything.utils import logger
+from segment_anything.utils.logger import logger
 from segment_anything.utils.config import parse_args
 from segment_anything.utils.logger import setup_logging
 from segment_anything.utils.utils import sec_to_dhms

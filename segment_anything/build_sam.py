@@ -9,7 +9,7 @@ import torch
 from functools import partial
 
 from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer
-from .utils import logger
+from .utils.logger import logger
 from .utils.utils import freeze_layer
 
 

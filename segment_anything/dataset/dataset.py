@@ -8,7 +8,7 @@ from pycocotools.coco import COCO
 from torch.utils.data import DataLoader
 
 from segment_anything.dataset.transform import create_transform_pipeline
-from segment_anything.utils import logger
+from segment_anything.utils.logger import logger
 from segment_anything.utils.registry import DATASET_REGISTRY
 
 
