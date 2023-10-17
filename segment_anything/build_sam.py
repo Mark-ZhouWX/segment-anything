@@ -9,6 +9,8 @@ import torch
 from functools import partial
 
 from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer
+from .utils import logger
+from .utils.utils import freeze_layer
 
 
 def build_sam_vit_h(checkpoint=None):
@@ -105,3 +107,14 @@ def _build_sam(
             state_dict = torch.load(f)
         sam.load_state_dict(state_dict)
     return sam
+
+
+def create_model(args):
+    model = sam_model_registry[args.type](checkpoint=args.checkpoint)
+    if args.freeze is not None:
+        for module in ['image_encoder', 'prompt_encoder', 'mask_decoder']:
+            if not args.freeze.get(module, False):
+                continue
+            logger.info(f'freezing {module}')
+            freeze_layer(getattr(model, module))
+    return model
