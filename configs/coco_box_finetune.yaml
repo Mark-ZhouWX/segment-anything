@@ -4,7 +4,8 @@ distributed: False
 device: cuda
 work_root: &work_root ./work_dir/
 log_level: info
-amp_level: O2
+log_interval: 20
+save_interval: 2
 
 # ---------------------------------------------
 # Part2: module setting

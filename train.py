@@ -40,45 +40,57 @@ def main(args) -> None:
     dataset_size = len(train_dataloader)
     model = model.to(args.device)
     train_start_time = time.time()
+    log_interval = args.log_interval
+    save_interval = args.save_interval
+    accumulate_loss = []
+
     for epoch_id in range(epoch_size):
         cur_epoch = epoch_id + 1
         step_start_time = time.time()
         for step_id, (image, gt_masks, boxes) in enumerate(train_dataloader):
             cur_step = step_id + 1
             # forward and backward
-            image, gt_masks, gt_boxes = image.to(args.device), gt_masks.to(args.device), boxes.to(args.device)
-            pred_masks, pred_ious = model(image, gt_boxes)
+            image, gt_masks, boxes = image.cuda(), gt_masks.cuda(), boxes.cuda()
+            pred_masks, pred_ious = model(image, boxes)
             loss_dict = loss_fn(pred_masks, pred_ious, gt_masks)
             loss = loss_dict['loss']
+            accumulate_loss.append(loss)
             loss.backward()
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
 
-            # get time info
-            step_cost = time.time() - step_start_time
-            step_start_time = time.time()
-            train_already_cost = sec_to_dhms(time.time() - train_start_time)
-            train_left = sec_to_dhms((dataset_size * epoch_size - cur_step) * step_cost)
-            step_time_str = f'{step_cost:.2f}s'
-            train_already_cost_str = f'{train_already_cost[0]}d {train_already_cost[1]:02d}:' \
-                                     f'{train_already_cost[2]:02d}:{train_already_cost[3]:02d}'
-            train_time_left_str = f'{train_left[0]}d {train_left[1]:02d}:{train_left[2]:02d}:{train_left[3]:02d}'
+            if cur_step % log_interval == 0:
+                # get time info
+                step_cost = (time.time() - step_start_time) / log_interval # average step time
+                step_start_time = time.time()
+                train_already_cost = sec_to_dhms(time.time() - train_start_time)
+                train_left = sec_to_dhms((dataset_size * epoch_size - cur_step) * step_cost)
+                step_time_str = f'{step_cost:.2f}s'
+                train_already_cost_str = f'{train_already_cost[0]}d {train_already_cost[1]:02d}:' \
+                                         f'{train_already_cost[2]:02d}:{train_already_cost[3]:02d}'
+                train_time_left_str = f'{train_left[0]}d {train_left[1]:02d}:{train_left[2]:02d}:{train_left[3]:02d}'
 
-            # print log
-            lr = scheduler.get_lr()[0]
-            logger.info(', '.join([
-                f'glb_step[{cur_step}/{dataset_size * epoch_size}]',
-                f'loc_step[{cur_step % dataset_size}/{dataset_size}]',
-                f'epoch[{cur_epoch}/{epoch_size}]',
-                f'loss[{loss.item():.4f}]',
-                # f'smooth_loss[{smooth_loss.asnumpy():.4f}]',
-                f'lr[{lr:.7f}]',
-                f'step_time[{step_time_str}]',
-                f'already_cost[{train_already_cost_str}]',
-                f'train_left[{train_time_left_str}]',
-            ]))
+                lr = scheduler.get_lr()[0]
+                smooth_loss = sum(accumulate_loss) / log_interval
+                accumulate_loss = []
+
+                logger.info(', '.join([
+                    f'glb_step[{cur_step}/{dataset_size * epoch_size}]',
+                    f'loc_step[{cur_step % dataset_size}/{dataset_size}]',
+                    f'epoch[{cur_epoch}/{epoch_size}]',
+                    f'loss[{loss.item():.4f}]',
+                    f'smooth_loss[{smooth_loss.item():.4f}]',
+                    f'lr[{lr:.7f}]',
+                    f'step_time[{step_time_str}]',
+                    f'already_cost[{train_already_cost_str}]',
+                    f'train_left[{train_time_left_str}]',
+                ]))
+            if main_device and cur_epoch % save_interval == 0:
+                save_path = os.path.join(args.work_dir, f'sam_{cur_epoch:03d}.pth')
+                torch.save(model.state_dict(), save_path)
     logger.info(f'finish training')
+
 
 def get_optimizer_and_scheduler(model, args_optimizer):
 
@@ -104,7 +116,12 @@ def set_log(args):
     time = datetime.now()
     save_dir = f'{time.year}_{time.month:02d}_{time.day:02d}-' \
                f'{time.hour:02d}_{time.minute:02d}_{time.second:02d}'
+    work_dir = os.path.join(args.work_root, save_dir)
+    os.makedirs(work_dir, exist_ok=True)
     setup_logging(log_dir=os.path.join(args.work_root, save_dir, 'log'), log_level=args.log_level)
+
+    # set work dir
+    args.work_dir = work_dir
 
 
 if __name__ == "__main__":
