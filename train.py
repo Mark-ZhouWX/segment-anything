@@ -18,18 +18,23 @@ def main(args) -> None:
     # Step1: initialize environment
     torch.manual_seed(42)
 
-    set_log(args)
+    local_rank, main_device, _ = set_distributed(args.distributed)
+
+    set_log(args, local_rank)
 
     logger.info(args.pretty())
 
     # Step2: create dataset
-    train_dataloader = create_dataloader(args.train_loader)
-    eval_dataloader = create_dataloader(args.eval_loader)
+    train_dataloader = create_dataloader(args.train_loader, args.distributed)
+    eval_dataloader = create_dataloader(args.eval_loader, args.distributed)
 
     # create model, load pretrained ckpt, set amp level, also freeze layer if specified
     model = create_model(args.network.model)
     loss_fn = create_loss_fn(args.network.loss)
     model.train()
+    model = model.cuda()
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
 
     # Step3: create optimizer, including learning rate scheduler and group parameter settings
     optimizer, scheduler = get_optimizer_and_scheduler(model, args.optimizer)
@@ -38,7 +43,6 @@ def main(args) -> None:
     logger.info(f'start training')
     epoch_size = args.train_loader.epoch_size
     dataset_size = len(train_dataloader)
-    model = model.to(args.device)
     train_start_time = time.time()
     log_interval = args.log_interval
     save_interval = args.save_interval
@@ -55,11 +59,10 @@ def main(args) -> None:
             loss_dict = loss_fn(pred_masks, pred_ious, gt_masks)
             loss = loss_dict['loss']
             accumulate_loss.append(loss)
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             scheduler.step()
-            optimizer.zero_grad()
-
             if cur_step % log_interval == 0:
                 # get time info
                 step_cost = (time.time() - step_start_time) / log_interval # average step time
@@ -112,16 +115,31 @@ def get_optimizer_and_scheduler(model, args_optimizer):
     return optimizer, scheduler
 
 
-def set_log(args):
+def set_log(args, rank_id):
     time = datetime.now()
     save_dir = f'{time.year}_{time.month:02d}_{time.day:02d}-' \
                f'{time.hour:02d}_{time.minute:02d}_{time.second:02d}'
     work_dir = os.path.join(args.work_root, save_dir)
     os.makedirs(work_dir, exist_ok=True)
-    setup_logging(log_dir=os.path.join(args.work_root, save_dir, 'log'), log_level=args.log_level)
+
+    setup_logging(log_dir=os.path.join(args.work_root, save_dir, 'log'), log_level=args.log_level, rank_id=rank_id)
 
     # set work dir
     args.work_dir = work_dir
+
+
+def set_distributed(distributed=False):
+    if not distributed:
+        return 0, True, torch.device('cuda')
+
+    torch.distributed.init_process_group('nccl')
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
+    device = torch.device('cuda', local_rank)
+
+    main_device = local_rank == 0
+
+    return local_rank, main_device, device
 
 
 if __name__ == "__main__":

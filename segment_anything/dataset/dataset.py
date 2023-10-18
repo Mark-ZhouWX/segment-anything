@@ -3,6 +3,7 @@ from typing import List
 
 import cv2
 import numpy as np
+import torch.utils.data
 
 from pycocotools.coco import COCO
 from torch.utils.data import DataLoader
@@ -12,19 +13,20 @@ from segment_anything.utils.logger import logger
 from segment_anything.utils.registry import DATASET_REGISTRY
 
 
-def create_dataloader(args):
+def create_dataloader(args, distributed=False):
     """
     create batched dataloader
     """
 
     dataset = DATASET_REGISTRY.instantiate(**args.dataset)
 
+    sampler = torch.utils.data.DistributedSampler(dataset) if distributed else None
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,
-        shuffle=True,
         num_workers=args.num_workers,
         drop_last=args.drop_remainder,
+        sampler=sampler,
                           )
 
     return dataloader
