@@ -1,3 +1,4 @@
+import sys
 from typing import List
 
 import mindspore as ms
@@ -17,10 +18,16 @@ class BaseMetric:
 
 @METRIC_REGISTRY.registry_module()
 class MaskMiou(BaseMetric):
-    def __init__(self):
+    def __init__(self, max_box_pre_image=sys.maxsize):
+        """
+        calculate mean IOU of between mask prediction and ground truth
+        Args:
+            max_box_pre_image: maximum of box number per image. exceeding boxes are omitted. default, no limitation
+        """
         super(MaskMiou, self).__init__()
         self.sum_iou = torch.tensor(0.0).cuda()
         self.num_step = torch.tensor(0.0).cuda()
+        self.max_box_pre_image = max_box_pre_image
         self.clear()
 
     def clear(self):
@@ -34,19 +41,20 @@ class MaskMiou(BaseMetric):
         preds, gts = inputs[0]['masks'], inputs[1]['masks']
         iou_list = []
 
-        num_valid = sum(len(g) for g in gts)
+        num_valid = []
 
-        for pred, gt in zip(preds, gts):  # (b, n)
-            pred_mask = pred.to(torch.float32)  # bool -> float32
-            gt_mask = gt.to(torch.float32)
+        for pred, gt in zip(preds, gts):
+            v = min(self.max_box_pre_image, len(pred))
+            pred_mask = pred.to(torch.float32)[:v]  # bool -> float32
+            gt_mask = gt.to(torch.float32)[:v]
 
             assert pred_mask.shape == gt_mask.shape
             iou = calc_iou(pred_mask, gt_mask)  # (n,)
             iou_list.append(iou.sum())
-        miou_per_batch = sum(iou_list) / num_valid  # (1,)
+            num_valid.append(v)
 
-        self.num_step += 1
-        self.sum_iou += miou_per_batch
+        self.num_step += sum(num_valid)   # (1,)
+        self.sum_iou += sum(iou_list)
     
     def eval(self):
         # reduce from all the devices

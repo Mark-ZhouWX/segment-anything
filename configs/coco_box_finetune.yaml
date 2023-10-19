@@ -85,8 +85,8 @@ eval_loader: &eval_loader
   batch_size: 1
   drop_remainder: False
   num_workers: 1
-  max_rowsize: 36  # 36M space for dataloader, increase with gt_size
   max_eval_iter: null  # the max iteration to eval, default to eval all the dataset
 
 eval_metric: &eval_metric
   - type: segment_anything.evaluate.metrics.MaskMiou
+    max_box_pre_image: 40
