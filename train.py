@@ -116,9 +116,12 @@ def get_optimizer_and_scheduler(model, args_optimizer):
 
 
 def set_log(args, rank_id):
+    if torch.distributed.is_initialized():
+        torch.distributed.barrier()
     time = datetime.now()
     save_dir = f'{time.year}_{time.month:02d}_{time.day:02d}-' \
                f'{time.hour:02d}_{time.minute:02d}_{time.second:02d}'
+    print(f'save dir: {save_dir}')
     work_dir = os.path.join(args.work_root, save_dir)
     os.makedirs(work_dir, exist_ok=True)
 

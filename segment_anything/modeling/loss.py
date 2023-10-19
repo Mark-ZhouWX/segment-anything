@@ -42,6 +42,8 @@ class SAMLoss(nn.Module):
         bs = len(pred_masks)
         assert len(pred_ious) == bs and len(gt_masks) == bs
 
+        num_valid = sum(len(m) for m in gt_masks)
+
         focal_loss_list = []
         dice_loss_list = []
         mse_loss_list = []
@@ -55,18 +57,18 @@ class SAMLoss(nn.Module):
 
             # if False: # show pred and gt mask for debug
             #     import matplotlib.pyplot as plt
-            #     plt.imshow(pred_mask_01[0, 3].asnumpy())
+            #     plt.imshow(pred_mask_01[0].cpu().numpy())
             #     plt.show()
-            #     plt.imshow(gt_mask[0, 3].asnumpy())
+            #     plt.imshow(gt_mask[0].cpu().numpy())
             #     plt.show()
 
             focal_loss_list.append(self.focal_loss(pred_mask, gt_mask).sum())   # (n) -> (1,)
             dice_loss_list.append(self.dice_loss(pred_mask, gt_mask).sum())
             mse_loss_list.append(self.mse_loss(pred_iou, gt_iou).sum())
 
-        focal_loss = sum(focal_loss_list)  # (b,) -> (1)
-        dice_loss = sum(dice_loss_list)
-        mse_loss = sum(mse_loss_list)
+        focal_loss = sum(focal_loss_list) / num_valid  # (b,) -> (1)
+        dice_loss = sum(dice_loss_list) / num_valid
+        mse_loss = sum(mse_loss_list) / num_valid
         loss = self.focal_factor * focal_loss + self.dice_factor * dice_loss + self.mse_factor * mse_loss
 
         loss_dict = dict(loss=loss,
