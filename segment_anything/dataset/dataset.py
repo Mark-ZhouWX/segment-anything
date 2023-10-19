@@ -27,9 +27,22 @@ def create_dataloader(args, distributed=False):
         num_workers=args.num_workers,
         drop_last=args.drop_remainder,
         sampler=sampler,
+        collate_fn=collate_fn,
                           )
 
     return dataloader
+
+
+def collate_fn(batch):
+    result = dict()
+    ks = batch[0].keys()
+    for k in ks:
+        result[k]= []
+        for b in batch:
+            result[k].append(torch.from_numpy(b[k]))
+        if k not in ['boxes', 'masks']:
+            result[k] = torch.stack(result[k])
+    return result
 
 
 @DATASET_REGISTRY.registry_module()
@@ -86,7 +99,7 @@ class COCODataset:
         if self.output_column is None:
             self.output_column = list(data_dict.key())
 
-        return tuple(data_dict[k] for k in self.output_column)
+        return {k:data_dict[k] for k in self.output_column}
 
 
 @DATASET_REGISTRY.registry_module()
@@ -141,4 +154,4 @@ class FLAREDataset:
         if self.output_column is None:
             self.output_column = list(data_dict.key())
 
-        return tuple(data_dict[k] for k in self.output_column)
+        return {k:data_dict[k] for k in self.output_column}

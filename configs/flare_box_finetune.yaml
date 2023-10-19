@@ -6,6 +6,7 @@ work_root: &work_root ./work_dir/
 log_level: info
 log_interval: 20
 save_interval: 2
+eval_interval: 1
 
 # ---------------------------------------------
 # Part2: module setting
@@ -52,10 +53,10 @@ train_loader:
       - type: segment_anything.dataset.transform.BoxFormMask
       - type: segment_anything.dataset.transform.LabelPad
         gt_size: 20
-    output_column: ['image', 'masks', 'boxes', 'valid_boxes' ]
+    output_column: ['image', 'masks', 'boxes' ]
 
   model_column: ['image', 'boxes' ]  # columns for model cell input
-  loss_column:  ['masks', 'valid_boxes' ]  # columns for loss function input
+  loss_column:  ['masks' ]  # columns for loss function input
 
   shuffle: True
   batch_size: 1
@@ -75,7 +76,7 @@ eval_loader: &eval_loader
     output_column: ['image', 'masks', 'boxes']
 
   model_column: &model_column [ 'image', 'boxes' ]  # columns for model cell input
-  eval_column: &eval_column [ 'masks', 'valid_boxes' ]  # columns for evaluation, usually for metric calculation or visualization
+  eval_column: &eval_column [ 'masks' ]  # columns for evaluation, usually for metric calculation or visualization
 
   shuffle: True
   batch_size: 1
@@ -87,20 +88,3 @@ eval_loader: &eval_loader
 
 eval_metric: &eval_metric
   - type: segment_anything.evaluate.metrics.MaskMiou
-#    - type: MaskVisualization
-
-
-callback:
-  - type: segment_anything.utils.callbacks.TrainStatusLog
-    loss_item: ['focal_loss', 'dice_loss', 'mse_loss']  # for log
-    interval: 100
-  - type: segment_anything.utils.callbacks.SaveCkpt
-    work_root: *work_root
-    interval: 1  # in epoch
-  - type: segment_anything.utils.callbacks.EvalWhileTrain
-    data_loader: *eval_loader
-    metric: *eval_metric
-    input_column:
-     - *model_column
-     - *eval_column
-    interval: 1  # in epoch

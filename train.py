@@ -7,11 +7,12 @@ import torch
 
 from segment_anything.build_sam import create_model
 from segment_anything.dataset.dataset import create_dataloader
+from segment_anything.evaluate.evaluator import Evaluator
+from segment_anything.evaluate.metrics import create_metric
 from segment_anything.modeling.loss import create_loss_fn
 from segment_anything.utils.logger import logger
 from segment_anything.utils.config import parse_args
-from segment_anything.utils.logger import setup_logging
-from segment_anything.utils.utils import sec_to_dhms
+from segment_anything.utils.utils import sec_to_dhms, set_distributed, set_log, to_cuda
 
 
 def main(args) -> None:
@@ -39,6 +40,11 @@ def main(args) -> None:
     # Step3: create optimizer, including learning rate scheduler and group parameter settings
     optimizer, scheduler = get_optimizer_and_scheduler(model, args.optimizer)
 
+    # Step4: create evaluator
+    metric = create_metric(args.eval_metric)
+    evaluator = Evaluator(model, eval_dataloader, metric=metric,
+                          input_column=[args.eval_loader.model_column, args.eval_loader.eval_column])
+
     # run training loop
     logger.info(f'start training')
     epoch_size = args.train_loader.epoch_size
@@ -46,15 +52,18 @@ def main(args) -> None:
     train_start_time = time.time()
     log_interval = args.log_interval
     save_interval = args.save_interval
+    eval_interval = args.get('eval_interval', None)
     accumulate_loss = []
 
     for epoch_id in range(epoch_size):
         cur_epoch = epoch_id + 1
         step_start_time = time.time()
-        for step_id, (image, gt_masks, boxes) in enumerate(train_dataloader):
+        for step_id, data in enumerate(train_dataloader):
             cur_step = step_id + 1
+
             # forward and backward
-            image, gt_masks, boxes = image.cuda(), gt_masks.cuda(), boxes.cuda()
+            image, gt_masks, boxes = data['image'], data['masks'], data['boxes']
+            image, gt_masks, boxes = to_cuda(image), to_cuda(gt_masks), to_cuda(boxes)
             pred_masks, pred_ious = model(image, boxes)
             loss_dict = loss_fn(pred_masks, pred_ious, gt_masks)
             loss = loss_dict['loss']
@@ -63,7 +72,10 @@ def main(args) -> None:
             loss.backward()
             optimizer.step()
             scheduler.step()
-            if cur_step % log_interval == 0:
+
+            # only the main device is logged, since there is a log bug for DDP with torch>=1.9.0
+            # see https://discuss.pytorch.org/t/ddp-training-log-issue/125808/9
+            if main_device and cur_step % log_interval == 0:
                 # get time info
                 step_cost = (time.time() - step_start_time) / log_interval # average step time
                 step_start_time = time.time()
@@ -89,9 +101,15 @@ def main(args) -> None:
                     f'already_cost[{train_already_cost_str}]',
                     f'train_left[{train_time_left_str}]',
                 ]))
+
+            # save pth
             if main_device and cur_epoch % save_interval == 0:
                 save_path = os.path.join(args.work_dir, f'sam_{cur_epoch:03d}.pth')
                 torch.save(model.state_dict(), save_path)
+        # evaluation
+        if eval_interval is not None and cur_epoch % eval_interval == 0:
+            logger.info(f'evaluate at epoch {cur_epoch}, interval is {eval_interval}')
+            evaluator.eval()
     logger.info(f'finish training')
 
 
@@ -113,36 +131,6 @@ def get_optimizer_and_scheduler(model, args_optimizer):
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     return optimizer, scheduler
-
-
-def set_log(args, rank_id):
-    if torch.distributed.is_initialized():
-        torch.distributed.barrier()
-    time = datetime.now()
-    save_dir = f'{time.year}_{time.month:02d}_{time.day:02d}-' \
-               f'{time.hour:02d}_{time.minute:02d}_{time.second:02d}'
-    print(f'save dir: {save_dir}')
-    work_dir = os.path.join(args.work_root, save_dir)
-    os.makedirs(work_dir, exist_ok=True)
-
-    setup_logging(log_dir=os.path.join(args.work_root, save_dir, 'log'), log_level=args.log_level, rank_id=rank_id)
-
-    # set work dir
-    args.work_dir = work_dir
-
-
-def set_distributed(distributed=False):
-    if not distributed:
-        return 0, True, torch.device('cuda')
-
-    torch.distributed.init_process_group('nccl')
-    local_rank = int(os.environ["LOCAL_RANK"])
-    torch.cuda.set_device(local_rank)
-    device = torch.device('cuda', local_rank)
-
-    main_device = local_rank == 0
-
-    return local_rank, main_device, device
 
 
 if __name__ == "__main__":

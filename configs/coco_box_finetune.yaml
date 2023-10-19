@@ -6,6 +6,7 @@ work_root: &work_root ./work_dir/
 log_level: info
 log_interval: 20
 save_interval: 2
+eval_interval: 1
 
 # ---------------------------------------------
 # Part2: module setting
@@ -55,7 +56,7 @@ train_loader:
     output_column: ['image', 'masks', 'boxes']
 
   model_column: ['image', 'boxes']  # columns for model cell input
-  loss_column:  ['masks', 'valid_boxes']  # columns for loss function input
+  loss_column:  ['masks']  # columns for loss function input
 
   shuffle: True
   batch_size: 1
@@ -75,10 +76,10 @@ eval_loader: &eval_loader
         target_size: 1024
       - type: segment_anything.dataset.transform.ImageNorm
         hwc2chw: True
-    output_column: ['image', 'masks', 'boxes', 'valid_boxes', 'origin_hw']
+    output_column: ['image', 'masks', 'boxes', 'origin_hw']
 
   model_column: &model_column [ 'image', 'boxes' ]  # columns for model cell input
-  eval_column: &eval_column [ 'masks', 'valid_boxes', 'origin_hw']  # columns for evaluation, usually for metric calculation or visualization
+  eval_column: &eval_column [ 'masks', 'origin_hw']  # columns for evaluation, usually for metric calculation or visualization
 
   shuffle: True
   batch_size: 1
@@ -87,3 +88,5 @@ eval_loader: &eval_loader
   max_rowsize: 36  # 36M space for dataloader, increase with gt_size
   max_eval_iter: null  # the max iteration to eval, default to eval all the dataset
 
+eval_metric: &eval_metric
+  - type: segment_anything.evaluate.metrics.MaskMiou
