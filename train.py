@@ -1,7 +1,6 @@
 import argparse
 import os
 import time
-from datetime import datetime
 
 import torch
 
@@ -49,17 +48,20 @@ def main(args) -> None:
     logger.info(f'start training')
     epoch_size = args.train_loader.epoch_size
     dataset_size = len(train_dataloader)
+    print(dataset_size, epoch_size, )
     train_start_time = time.time()
     log_interval = args.log_interval
     save_interval = args.save_interval
     eval_interval = args.get('eval_interval', None)
     accumulate_loss = []
 
+    global_step = 0
     for epoch_id in range(epoch_size):
         cur_epoch = epoch_id + 1
         step_start_time = time.time()
         for step_id, data in enumerate(train_dataloader):
             cur_step = step_id + 1
+            global_step += 1
 
             # forward and backward
             image, gt_masks, boxes = data['image'], data['masks'], data['boxes']
@@ -80,7 +82,7 @@ def main(args) -> None:
                 step_cost = (time.time() - step_start_time) / log_interval # average step time
                 step_start_time = time.time()
                 train_already_cost = sec_to_dhms(time.time() - train_start_time)
-                train_left = sec_to_dhms((dataset_size * epoch_size - cur_step) * step_cost)
+                train_left = sec_to_dhms((dataset_size * epoch_size - global_step) * step_cost)
                 step_time_str = f'{step_cost:.2f}s'
                 train_already_cost_str = f'{train_already_cost[0]}d {train_already_cost[1]:02d}:' \
                                          f'{train_already_cost[2]:02d}:{train_already_cost[3]:02d}'
@@ -91,7 +93,7 @@ def main(args) -> None:
                 accumulate_loss = []
 
                 logger.info(', '.join([
-                    f'glb_step[{cur_step}/{dataset_size * epoch_size}]',
+                    f'glb_step[{global_step}/{dataset_size * epoch_size}]',
                     f'loc_step[{cur_step % dataset_size}/{dataset_size}]',
                     f'epoch[{cur_epoch}/{epoch_size}]',
                     f'loss[{loss.item():.4f}]',
@@ -101,11 +103,11 @@ def main(args) -> None:
                     f'already_cost[{train_already_cost_str}]',
                     f'train_left[{train_time_left_str}]',
                 ]))
-
-            # save pth
-            if main_device and cur_epoch % save_interval == 0:
-                save_path = os.path.join(args.work_dir, f'sam_{cur_epoch:03d}.pth')
-                torch.save(model.state_dict(), save_path)
+        # Do something after train epoch
+        # save pth
+        if main_device and cur_epoch % save_interval == 0:
+            save_path = os.path.join(args.work_dir, f'sam_{cur_epoch:03d}.pth')
+            torch.save(model.state_dict(), save_path)
         # evaluation
         if eval_interval is not None and cur_epoch % eval_interval == 0:
             logger.info(f'evaluate at epoch {cur_epoch}, interval is {eval_interval}')

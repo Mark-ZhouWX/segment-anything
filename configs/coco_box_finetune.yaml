@@ -4,8 +4,8 @@ distributed: False
 device: cuda
 work_root: &work_root ./work_dir/
 log_level: info
-log_interval: 20
-save_interval: 2
+log_interval: 100  # converge at epoch 5
+save_interval: 1
 eval_interval: 1
 
 # ---------------------------------------------
@@ -60,10 +60,9 @@ train_loader:
 
   shuffle: True
   batch_size: 1
-  epoch_size: 20
+  epoch_size: 8
   drop_remainder: True
   num_workers: 2
-  max_rowsize: 24  # 24M space for dataloader
 
 
 eval_loader: &eval_loader
