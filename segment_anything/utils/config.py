@@ -26,6 +26,7 @@ def parse_args(parser_config):
     cfg_file = args_cmd.config
     # merge command line config and file config
     if cfg_file is not None:
+        assert os.path.exists(cfg_file), f'config file not exist at {cfg_file}'
         cfg, _, _ = load_config(args_cmd.config)
         cfg = OmegaConf.create(cfg)
         args.merge_with(cfg)

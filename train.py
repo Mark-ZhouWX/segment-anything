@@ -48,7 +48,6 @@ def main(args) -> None:
     logger.info(f'start training')
     epoch_size = args.train_loader.epoch_size
     dataset_size = len(train_dataloader)
-    print(dataset_size, epoch_size, )
     train_start_time = time.time()
     log_interval = args.log_interval
     save_interval = args.save_interval
