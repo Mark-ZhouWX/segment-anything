@@ -75,9 +75,7 @@ def main(args) -> None:
             optimizer.step()
             scheduler.step()
 
-            # only the main device is logged, since there is a log bug for DDP with torch>=1.9.0
-            # see https://discuss.pytorch.org/t/ddp-training-log-issue/125808/9
-            if main_device and cur_step % log_interval == 0:
+            if cur_step % log_interval == 0:
                 # get time info
                 step_cost = (time.time() - step_start_time) / log_interval # average step time
                 step_start_time = time.time()
@@ -92,17 +90,20 @@ def main(args) -> None:
                 smooth_loss = sum(accumulate_loss) / log_interval
                 accumulate_loss = []
 
-                logger.info(', '.join([
-                    f'glb_step[{global_step}/{dataset_size * epoch_size}]',
-                    f'loc_step[{cur_step % dataset_size}/{dataset_size}]',
-                    f'epoch[{cur_epoch}/{epoch_size}]',
-                    f'loss[{loss.item():.4f}]',
-                    f'smooth_loss[{smooth_loss.item():.4f}]',
-                    f'lr[{lr:.7f}]',
-                    f'step_time[{step_time_str}]',
-                    f'already_cost[{train_already_cost_str}]',
-                    f'train_left[{train_time_left_str}]',
-                ]))
+                # only the main device is logged, since there is a log bug for DDP with torch>=1.9.0
+                # see https://discuss.pytorch.org/t/ddp-training-log-issue/125808/9
+                if main_device:
+                    logger.info(', '.join([
+                        f'glb_step[{global_step}/{dataset_size * epoch_size}]',
+                        f'loc_step[{cur_step % dataset_size}/{dataset_size}]',
+                        f'epoch[{cur_epoch}/{epoch_size}]',
+                        f'loss[{loss.item():.4f}]',
+                        f'smooth_loss[{smooth_loss.item():.4f}]',
+                        f'lr[{lr:.7f}]',
+                        f'step_time[{step_time_str}]',
+                        f'already_cost[{train_already_cost_str}]',
+                        f'train_left[{train_time_left_str}]',
+                    ]))
         # Do something after train epoch
         # save pth
         if main_device and cur_epoch % save_interval == 0:
