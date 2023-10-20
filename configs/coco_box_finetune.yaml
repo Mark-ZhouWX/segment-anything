@@ -58,7 +58,6 @@ train_loader:
   model_column: ['image', 'boxes']  # columns for model cell input
   loss_column:  ['masks']  # columns for loss function input
 
-  shuffle: True
   batch_size: 1
   epoch_size: 8
   drop_remainder: True
@@ -80,7 +79,6 @@ eval_loader: &eval_loader
   model_column: &model_column [ 'image', 'boxes' ]  # columns for model cell input
   eval_column: &eval_column [ 'masks', 'origin_hw']  # columns for evaluation, usually for metric calculation or visualization
 
-  shuffle: True
   batch_size: 1
   drop_remainder: False
   num_workers: 1
